@@ -29,7 +29,8 @@ def recreate_container(containers_data):
         print(f'Removing … {remove}')
 
         print(f'Starting … {ctn_id}')
-        start = run(ctn_cli, capture_output=True).stdout.decode('utf-8')
+        start = run(['podman', 'run', '-d', ctn_cli],
+                    capture_output=True).stdout.decode('utf-8')
         print(f'Starting … {start}')
     print('Jobs done')
 
@@ -147,8 +148,8 @@ def inspect_container(containers_list):
         cli_mounts = format_mounts_cli(mounts)
         cli_network_ports = format_network_ports_cli(network_ports)
         cli_envs = format_envs_cli(envs)
-        cli = f'podman run -d {cli_name} {cli_mounts} {cli_envs} ' \
-              f'{cli_network_ports} {cli_restart_policy} {ctn_image}'
+        cli = f'{cli_name} {cli_mounts} {cli_envs} {cli_network_ports} ' \
+              f'{cli_restart_policy} {ctn_image}'
         ctn_to_recreate.append((ctn_id, cli))
     return ctn_to_recreate
 
