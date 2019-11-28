@@ -17,6 +17,6 @@ You need to execute Podhawk with same user running containers.
 I use `run` from `subprocess` and it's available from Python 3.5
 
 ## Notes
-- PEP8 and complexity tested via `flake8 --max-complexity 3`
+- PEP8 and complexity tested via `flake8 --max-complexity 5`
 - hard typed, no black magic for arguments and variables
 - a little inspired by functional programming about how I wrote function
