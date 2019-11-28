@@ -3,6 +3,55 @@ from subprocess import run
 from typing import List
 
 
+def remove_old_container(old_ctn_id):
+    print(f'Removing old container {old_ctn_id}')
+    remove = run(['podman', 'rm', old_ctn_id],
+                 capture_output=True).stdout.decode('utf-8')
+    print(f'Removing … {remove}')
+
+
+def post_healthcheck(old_ctn_id, new_ctn_id, status):
+    if 'NA' in status:
+        print('No healthcheck defined in this image… '
+              'We continue at your own risk')
+        remove_old_container(old_ctn_id)
+    elif 'true' in status:
+        print('Healthcheck success')
+        remove_old_container(old_ctn_id)
+    else:
+        print(f'Healthcheck failed, restarting old container {old_ctn_id}')
+        print("New container forced to stop and don't delete it "
+              "to permit you to analyze logs")
+        run(['podman', 'stop', new_ctn_id])
+        start_old = run(['podman', 'start', old_ctn_id],
+                        capture_output=True).stdout.decode('utf-8')
+        print(f'Starting … {start_old}')
+
+
+def health_check(container_id):
+    """
+    Analyze healthcheck status (3 times) and return the value
+    needed by post_healthcheck
+    Args:
+        container_id (str): new container id
+
+    Returns:
+        A string that permit to know in which situation we are
+    """
+    status: str = 'false'
+    for i in range(3):
+        output = run(['podman', 'healthcheck', 'run', container_id],
+                     capture_output=True).stdout.decode('utf-8')
+        print(f'healthcheck {i}/3: {output}')
+        if 'has no defined healthcheck' in output:
+            return 'NA'
+        elif 'healthy' in output:
+            status = 'true'
+        else:
+            status = 'false'
+    return status
+
+
 def recreate_container(containers_data):
     """
     execute commands included in data to recreate containers
@@ -14,24 +63,23 @@ def recreate_container(containers_data):
         Print status about each step for each container
     """
     for element in containers_data:
-        ctn_id: str = element[0]
-        ctn_cli: str = element[1]
+        old_ctn_id: str = element[0]
+        new_ctn_cli: str = element[1]
 
-        print(f'Recreating container id : {ctn_id}')
-        print(f'Stopping {ctn_id}')
-        stop = run(['podman', 'stop', ctn_id],
-                   capture_output=True).stdout.decode('utf-8')
-        print(f'Stopping … {stop}')
+        print(f'Recreating container id : {old_ctn_id}')
+        print(f'Stopping {old_ctn_id}')
+        stop_old = run(['podman', 'stop', old_ctn_id],
+                       capture_output=True).stdout.decode('utf-8')
+        print(f'Stopping … {stop_old}')
 
-        print(f'Removing {ctn_id}')
-        remove = run(['podman', 'rm', ctn_id],
-                     capture_output=True).stdout.decode('utf-8')
-        print(f'Removing … {remove}')
+        print(f'Starting new container …')
+        start_new = run(['podman', 'run', '-d', new_ctn_cli],
+                        capture_output=True).stdout.decode('utf-8')
+        print(f'Starting … {start_new}')
 
-        print(f'Starting … {ctn_id}')
-        start = run(['podman', 'run', '-d', ctn_cli],
-                    capture_output=True).stdout.decode('utf-8')
-        print(f'Starting … {start}')
+        healthcheck_status: str = health_check(start_new)
+        post_healthcheck(old_ctn_id, start_new, healthcheck_status)
+
     print('Jobs done')
 
 
@@ -138,17 +186,15 @@ def inspect_container(containers_list):
         inspect_output = run(['podman', 'inspect', '--format', 'json', ctn_id],
                              capture_output=True).stdout.decode('utf-8')
         inspect_json = loads(inspect_output)[0]
-        ctn_name = inspect_json['Name']
         mounts = inspect_json['Mounts']
         network_ports = inspect_json['NetworkSettings']['Ports']
         envs = inspect_json['Config']['Env']
         restart_policy = inspect_json['HostConfig']['RestartPolicy']
-        cli_name = f'--name={ctn_name}'
         cli_restart_policy = format_restart_cli(restart_policy)
         cli_mounts = format_mounts_cli(mounts)
         cli_network_ports = format_network_ports_cli(network_ports)
         cli_envs = format_envs_cli(envs)
-        cli = f'{cli_name} {cli_mounts} {cli_envs} {cli_network_ports} ' \
+        cli = f'{cli_mounts} {cli_envs} {cli_network_ports} ' \
               f'{cli_restart_policy} {ctn_image}'
         ctn_to_recreate.append((ctn_id, cli))
     return ctn_to_recreate
