@@ -122,8 +122,8 @@ def format_network_ports_cli(network_data):
             host_ip = port['hostIP']
             network_ports_pre_cli.append(
                 f'-p {host_ip}:{host_port}:{container_port}'
-            ) if len(host_ip) > 0 else network_ports_pre_cli. \
-                append(f'-p {host_port}:{container_port}')
+            ) if len(host_ip) > 0 else network_ports_pre_cli.append(
+                f'-p {host_port}:{container_port}')
         return ' '.join(network_ports_pre_cli)
     else:
         return ''
@@ -291,8 +291,8 @@ def main():
     img_updated: List[str] = update_img(img_id_name_tag)
 
     if (len(img_updated) > 0) & (len(ctn_list) > 0):
-        to_recreate: List[tuple] = containers_to_recreate(ctn_list,
-                                                          img_updated)
+        to_recreate: List[tuple] = containers_to_recreate(
+            ctn_list, img_updated)
         if len(to_recreate) > 0:
             print('Inspecting running containers:')
             to_recreate_cli: List[tuple] = inspect_container(to_recreate)
