@@ -1,5 +1,5 @@
 from json import loads
-from subprocess import run
+from subprocess import run, PIPE, STDOUT
 from typing import List
 
 
@@ -41,7 +41,7 @@ def health_check(container_id):
     status: str = 'false'
     for i in range(3):
         output = run(['podman', 'healthcheck', 'run', container_id],
-                     capture_output=True).stdout.decode('utf-8')
+                     stdout=PIPE, stderr=STDOUT).stdout.decode('utf-8')
         print(f'healthcheck {i}/3: {output}')
         if 'has no defined healthcheck' in output:
             return 'NA'
@@ -101,7 +101,7 @@ def format_envs_cli(envs_data):
         envs_to_remove = [env for env in envs if prefix in env]
         for env in envs_to_remove:
             envs.remove(env)
-    return ' '.join([f'-e {env}' for env in envs])
+    return ' '.join([f'-e "{env}"' for env in envs])
 
 
 def format_network_ports_cli(network_data):
