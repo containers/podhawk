@@ -20,7 +20,7 @@ def post_healthcheck(old_ctn_id, new_ctn_id, status):
         remove_old_container(old_ctn_id)
     else:
         print(f'Healthcheck failed, restarting old container {old_ctn_id}')
-        print("New container forced to stop and don't delete it "
+        print("New container forced to stop and not removed "
               "to permit you to analyze logs")
         run(['podman', 'stop', new_ctn_id])
         start_old = run(['podman', 'start', old_ctn_id],
@@ -45,10 +45,10 @@ def health_check(container_id):
         print(f'healthcheck {i}/3: {output}')
         if 'has no defined healthcheck' in output:
             return 'NA'
-        elif 'healthy' in output:
-            status = 'true'
-        else:
+        elif 'unhealthy' in output:
             status = 'false'
+        else:
+            status = 'true'
     return status
 
 
@@ -73,7 +73,7 @@ def recreate_container(containers_data):
         print(f'Stopping … {stop_old}')
 
         print(f'Starting new container …')
-        start_new = run(['podman', 'run', '-d', new_ctn_cli],
+        start_new = run(new_ctn_cli,
                         capture_output=True).stdout.decode('utf-8')
         print(f'Starting … {start_new}')
 
@@ -95,13 +95,16 @@ def format_envs_cli(envs_data):
     """
     added_automatically = ('PATH=', 'TERM=', 'HOSTNAME=', 'container=',
                            'GODEBUG=', 'XDG_CACHE_HOME=', 'HOME=')
-    envs = envs_data
 
-    for prefix in added_automatically:
-        envs_to_remove = [env for env in envs if prefix in env]
+    if len(envs_data) > 0:
+        envs = envs_data
+        for prefix in added_automatically:
+            envs_to_remove = [env for env in envs if prefix in env]
         for env in envs_to_remove:
             envs.remove(env)
-    return ' '.join([f'-e "{env}"' for env in envs])
+        return '{0},'.format(','.join([f'-e,"{env}"' for env in envs]))
+    else:
+        return ''
 
 
 def format_network_ports_cli(network_data):
@@ -121,10 +124,10 @@ def format_network_ports_cli(network_data):
             container_port = port['containerPort']
             host_ip = port['hostIP']
             network_ports_pre_cli.append(
-                f'-p {host_ip}:{host_port}:{container_port}'
+                f'-p,{host_ip}:{host_port}:{container_port}'
             ) if len(host_ip) > 0 else network_ports_pre_cli.append(
-                f'-p {host_port}:{container_port}')
-        return ' '.join(network_ports_pre_cli)
+                f'-p,{host_port}:{container_port}')
+        return '{0},'.format(', '.join(network_ports_pre_cli))
     else:
         return ''
 
@@ -139,13 +142,13 @@ def format_mounts_cli(mounts_data):
     Returns:
         The command line needed otherwise blank line
     """
-    mounts_pre_cli: List[str] = []
+    mounts_pre_cli: List[tuple] = []
     if len(mounts_data) > 0:
         for mount in mounts_data:
             source = mount['Source']
             destination = mount['Destination']
-            mounts_pre_cli.append(f'-v {source}:{destination}')
-        return ' '.join(mounts_pre_cli)
+            mounts_pre_cli.append(f'-v,{source}:{destination}')
+        return '{0},'.format(', '.join(mounts_pre_cli))
     else:
         return ''
 
@@ -194,8 +197,8 @@ def inspect_container(containers_list):
         cli_mounts = format_mounts_cli(mounts)
         cli_network_ports = format_network_ports_cli(network_ports)
         cli_envs = format_envs_cli(envs)
-        cli = f'{cli_mounts} {cli_envs} {cli_network_ports} ' \
-              f'{cli_restart_policy} {ctn_image}'
+        cli = f'podman, run, -d, {cli_mounts}{cli_envs}{cli_network_ports}' \
+              f'{cli_restart_policy} {ctn_image}'.split(sep=',')
         ctn_to_recreate.append((ctn_id, cli))
     return ctn_to_recreate
 
